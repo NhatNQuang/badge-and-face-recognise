@@ -1,18 +1,11 @@
-# Xử lý mô hình YOLOv8, inference, plot và training
-ultralytics==8.0.22  # Đề xuất dùng version 8.0.x (hoặc mới hơn) để đảm bảo tính ổn định với YOLOv8
-
-# Xử lý hình ảnh (PIL/Pillow)
-Pillow==10.0.0      # Thư viện Image/PIL (yêu cầu của ultralytics, numpy, và cho các hàm xử lý ảnh)
-
-# Xử lý mảng và tính toán khoa học (yêu cầu của ultralytics, cv2, Pillow)
-numpy==1.24.0       # Tương thích với Python 3.11
-
-# Xây dựng API (FastAPI)
-fastapi==0.104.1    # Tương thích với Python 3.11
-
-# Xử lý file upload trong FastAPI
-PyYAML==6.0         
-
-pandas==2.1.0       
-opencv-python==4.8.0 # Thư viện cv2
-deep_sort_realtime==1.1.0 # Thư viện deep_sort_realtime
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python-headless>=4.8.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+Pillow>=10.0.0
+numpy>=1.24.0
+pydantic>=2.5.0
+typing-extensions>=4.10.0

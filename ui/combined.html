@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Detection - AI Detection System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">🤖 AI Detection</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="upload.html">Human Detection</a></li>
+                <li><a href="camera.html">Human Camera</a></li>
+                <li><a href="badge.html">Badge Detection</a></li>
+                <li><a href="combined.html">Combined Detection</a></li>
+                <li><a href="/docs" target="_blank">API Docs</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container" style="padding: 3rem 1.5rem; min-height: 80vh;">
+        <div style="text-align: center; margin-bottom: 3rem;">
+            <h1>🎯 Combined Human & Badge Detection</h1>
+            <p style="color: #b0b0b0; font-size: 1.2rem;">
+                Detect both humans and badges simultaneously with color-coded bounding boxes
+            </p>
+        </div>
+
+        <!-- Color Legend -->
+        <div
+            style="background: rgba(255,255,255,0.05); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 2rem; text-align: center;">
+            <h3 style="margin-bottom: 1rem;">📊 Color Legend</h3>
+            <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 30px; height: 30px; background: #00ff00; border-radius: 4px;"></div>
+                    <span style="font-weight: 600;">Green = Humans</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 30px; height: 30px; background: #0000ff; border-radius: 4px;"></div>
+                    <span style="font-weight: 600;">Blue = Badges</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="controls">
+            <h3>⚙️ Camera Settings</h3>
+
+            <div class="grid grid-2">
+                <div class="control-group">
+                    <label for="cameraSource">📹 Camera Source</label>
+                    <select id="cameraSource">
+                        <option value="0">Webcam (Default)</option>
+                        <option value="1">Webcam 2</option>
+                        <option value="2">Webcam 3</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="confidence">
+                        🎯 Confidence Threshold
+                        <span class="range-value" id="confidenceValue">0.50</span>
+                    </label>
+                    <input type="range" id="confidence" min="0" max="1" step="0.05" value="0.5">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="startBtn">▶️ Start Stream</button>
+                <button class="btn btn-secondary" id="stopBtn" disabled>⏹️ Stop Stream</button>
+            </div>
+        </div>
+
+        <!-- Video Stream Section -->
+        <div style="margin-top: 2rem;">
+            <div class="grid grid-video-layout">
+                <div>
+                    <div class="card">
+                        <h3>📹 Live Combined Stream</h3>
+                        <div class="video-container" style="margin-top: 1rem;">
+                            <img id="videoStream" class="video-stream" style="display: none;">
+                            <div id="streamPlaceholder"
+                                style="aspect-ratio: 16/9; background: rgba(0,0,0,0.5); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🎥</div>
+                                <p style="color: #888;">Click "Start Stream" to begin</p>
+                                <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
+                                    Green boxes = Humans | Blue boxes = Badges
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="card">
+                        <h3>📊 Real-time Statistics</h3>
+
+                        <div class="detection-info" style="margin-top: 1.5rem;">
+                            <div class="info-card" style="background: rgba(0, 255, 0, 0.1);">
+                                <div class="value" id="humanCount" style="color: #00ff00;">0</div>
+                                <div class="label">🟢 Humans Detected</div>
+                            </div>
+
+                            <div class="info-card" style="background: rgba(0, 0, 255, 0.1);">
+                                <div class="value" id="badgeCount" style="color: #4da6ff;">0</div>
+                                <div class="label">🔵 Badges Detected</div>
+                            </div>
+
+                            <div class="info-card">
+                                <div class="value" id="totalCount">0</div>
+                                <div class="label">Total Detections</div>
+                            </div>
+
+                            <div class="info-card">
+                                <div class="value" id="totalFrames">0</div>
+                                <div class="label">Frames Processed</div>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top: 1.5rem; padding: 1rem; background: rgba(102, 126, 234, 0.1); border-radius: var(--radius-md);">
+                            <h4 style="margin-bottom: 1rem;">📈 Stream Status</h4>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #b0b0b0;">Status:</span>
+                                <span id="streamStatus" style="color: var(--danger); font-weight: 600;">Inactive</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #b0b0b0;">Camera:</span>
+                                <span id="cameraInfo">Not selected</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: #b0b0b0;">Confidence:</span>
+                                <span id="confidenceInfo">0.50</span>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md);">
+                            <h4 style="margin-bottom: 0.5rem;">💡 Tips</h4>
+                            <ul style="color: #b0b0b0; font-size: 0.9rem; padding-left: 1.5rem;">
+                                <li>Green boxes show detected people</li>
+                                <li>Blue boxes show detected badges</li>
+                                <li>Both models run simultaneously</li>
+                                <li>GPU accelerated for best performance</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 AI Detection System - Combined Detection</p>
+        </div>
+    </footer>
+
+    <script src="js/utils.js"></script>
+    <script src="js/combined.js"></script>
+</body>
+
+</html>

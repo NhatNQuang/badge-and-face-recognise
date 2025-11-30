@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Detection Camera Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="number"], input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        input[type="range"] {
+            padding: 0;
+        }
+
+        .range-value {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 150px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .video-container {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+
+        #videoStream {
+            width: 100%;
+            border-radius: 10px;
+            display: none;
+        }
+
+        #videoStream.active {
+            display: block;
+        }
+
+        .info-box {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .info-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .buttons {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Human Detection Camera Demo</h1>
+
+        <div class="controls">
+            <h2 style="margin-bottom: 20px; color: #333;">⚙️ Cài đặt</h2>
+            
+            <div class="control-group">
+                <label for="cameraSource">Camera Source (0 = webcam mặc định):</label>
+                <input type="number" id="cameraSource" value="0" min="0" max="10">
+            </div>
+
+            <div class="control-group">
+                <label for="confidence">
+                    Confidence Threshold: 
+                    <span class="range-value" id="confidenceValue">0.5</span>
+                </label>
+                <input type="range" id="confidence" min="0" max="1" step="0.05" value="0.5">
+            </div>
+
+            <div class="buttons">
+                <button class="btn-primary" onclick="startStream()">▶️ Start Stream</button>
+                <button class="btn-secondary" onclick="stopStream()">⏹️ Stop Stream</button>
+                <button class="btn-success" onclick="takeSnapshot()">📸 Take Snapshot</button>
+            </div>
+        </div>
+
+        <div class="video-container">
+            <h2 style="margin-bottom: 15px; color: #333;">📹 Video Stream</h2>
+            <img id="videoStream" alt="Camera Stream">
+            <p id="streamStatus" style="text-align: center; color: #666; padding: 40px;">
+                Click "Start Stream" để bắt đầu
+            </p>
+        </div>
+
+        <div class="info-box">
+            <h2 style="margin-bottom: 15px; color: #333;">ℹ️ Thông tin</h2>
+            <div class="info-item">
+                <span class="info-label">Trạng thái:</span>
+                <span class="status inactive" id="status">Inactive</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">API Endpoint:</span>
+                <span class="info-value" id="endpoint">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Số người phát hiện (snapshot):</span>
+                <span class="info-value" id="detectionCount">-</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:6033';
+        let isStreaming = false;
+
+        // Update confidence value display
+        document.getElementById('confidence').addEventListener('input', function(e) {
+            document.getElementById('confidenceValue').textContent = e.target.value;
+        });
+
+        function startStream() {
+            const source = document.getElementById('cameraSource').value;
+            const confidence = document.getElementById('confidence').value;
+            const streamUrl = `${API_BASE}/camera/stream?source=${source}&confidence=${confidence}`;
+            
+            const videoElement = document.getElementById('videoStream');
+            const statusElement = document.getElementById('streamStatus');
+            const statusBadge = document.getElementById('status');
+            const endpointElement = document.getElementById('endpoint');
+            
+            videoElement.src = streamUrl;
+            videoElement.classList.add('active');
+            statusElement.style.display = 'none';
+            
+            statusBadge.textContent = 'Active';
+            statusBadge.className = 'status active';
+            endpointElement.textContent = '/camera/stream';
+            
+            isStreaming = true;
+            
+            console.log('Stream started:', streamUrl);
+        }
+
+        function stopStream() {
+            const videoElement = document.getElementById('videoStream');
+            const statusElement = document.getElementById('streamStatus');
+            const statusBadge = document.getElementById('status');
+            
+            videoElement.src = '';
+            videoElement.classList.remove('active');
+            statusElement.style.display = 'block';
+            statusElement.textContent = 'Stream đã dừng. Click "Start Stream" để bắt đầu lại.';
+            
+            statusBadge.textContent = 'Inactive';
+            statusBadge.className = 'status inactive';
+            
+            isStreaming = false;
+            
+            console.log('Stream stopped');
+        }
+
+        async function takeSnapshot() {
+            const source = document.getElementById('cameraSource').value;
+            const confidence = document.getElementById('confidence').value;
+            const snapshotUrl = `${API_BASE}/camera/snapshot?source=${source}&confidence=${confidence}`;
+            
+            try {
+                const response = await fetch(snapshotUrl);
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Display snapshot in new window
+                    const win = window.open('', '_blank');
+                    win.document.write(`
+                        <html>
+                        <head>
+                            <title>Snapshot</title>
+                            <style>
+                                body { 
+                                    margin: 0; 
+                                    padding: 20px; 
+                                    background: #f5f5f5;
+                                    font-family: Arial, sans-serif;
+                                }
+                                .container {
+                                    max-width: 1000px;
+                                    margin: 0 auto;
+                                    background: white;
+                                    padding: 20px;
+                                    border-radius: 10px;
+                                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                                }
+                                img { 
+                                    width: 100%; 
+                                    border-radius: 8px;
+                                    margin-bottom: 20px;
+                                }
+                                .info {
+                                    background: #f8f9fa;
+                                    padding: 15px;
+                                    border-radius: 8px;
+                                }
+                                h2 { color: #333; }
+                                pre {
+                                    background: #282c34;
+                                    color: #abb2bf;
+                                    padding: 15px;
+                                    border-radius: 5px;
+                                    overflow-x: auto;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <h2>📸 Camera Snapshot</h2>
+                                <img src="data:image/jpeg;base64,${data.annotated_image}" alt="Snapshot">
+                                <div class="info">
+                                    <h3>Detection Results:</h3>
+                                    <p><strong>Total Detections:</strong> ${data.total_detections}</p>
+                                    <pre>${JSON.stringify(data.detections, null, 2)}</pre>
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                    `);
+                    
+                    // Update detection count
+                    document.getElementById('detectionCount').textContent = data.total_detections;
+                    
+                    console.log('Snapshot taken:', data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to take snapshot: ' + error.message);
+                console.error('Snapshot error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

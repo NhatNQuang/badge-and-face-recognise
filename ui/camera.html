@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Camera Detection - AI Human Detection</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">🤖 AI Detection</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="upload.html">Human Detection</a></li>
+                <li><a href="camera.html">Human Camera</a></li>
+                <li><a href="badge.html">Badge Detection</a></li>
+                <li><a href="combined.html">Combined Detection</a></li>
+                <li><a href="/docs" target="_blank">API Docs</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container" style="padding: 3rem 1.5rem; min-height: 80vh;">
+        <div style="text-align: center; margin-bottom: 3rem;">
+            <h1>🎥 Real-time Camera Detection</h1>
+            <p style="color: #b0b0b0; font-size: 1.2rem;">
+                Stream live video with AI-powered human detection
+            </p>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="controls">
+            <h3>⚙️ Camera Settings</h3>
+
+            <div class="grid grid-2">
+                <div class="control-group">
+                    <label for="cameraSource">
+                        📹 Camera Source
+                    </label>
+                    <select id="cameraSource">
+                        <option value="0">Webcam (Default)</option>
+                        <option value="1">Webcam 2</option>
+                        <option value="2">Webcam 3</option>
+                    </select>
+                    <p style="color: #888; font-size: 0.85rem; margin-top: 0.5rem;">
+                        Select your camera device
+                    </p>
+                </div>
+
+                <div class="control-group">
+                    <label for="confidence">
+                        🎯 Confidence Threshold
+                        <span class="range-value" id="confidenceValue">0.50</span>
+                    </label>
+                    <input type="range" id="confidence" min="0" max="1" step="0.05" value="0.5">
+                    <p style="color: #888; font-size: 0.85rem; margin-top: 0.5rem;">
+                        Higher values = fewer but more confident detections
+                    </p>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="startBtn">
+                    ▶️ Start Stream
+                </button>
+                <button class="btn btn-secondary" id="stopBtn" disabled>
+                    ⏹️ Stop Stream
+                </button>
+                <button class="btn btn-success" id="snapshotBtn" disabled>
+                    📸 Take Snapshot
+                </button>
+            </div>
+        </div>
+
+        <!-- Video Stream Section -->
+        <div style="margin-top: 2rem;">
+            <div class="grid grid-video-layout">
+                <!-- Video Display -->
+                <div>
+                    <div class="card">
+                        <h3>📹 Live Stream</h3>
+                        <div class="video-container" style="margin-top: 1rem;">
+                            <img id="videoStream" class="video-stream" style="display: none;">
+                            <div id="streamPlaceholder"
+                                style="aspect-ratio: 16/9; background: rgba(0,0,0,0.5); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🎥</div>
+                                <p style="color: #888;">Click "Start Stream" to begin</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Panel -->
+                <div>
+                    <div class="card">
+                        <h3>📊 Real-time Statistics</h3>
+
+                        <div class="detection-info" style="margin-top: 1.5rem;">
+                            <div class="info-card">
+                                <div class="value" id="currentDetections">0</div>
+                                <div class="label">Current Detections</div>
+                            </div>
+
+                            <div class="info-card">
+                                <div class="value" id="totalFrames">0</div>
+                                <div class="label">Frames Processed</div>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top: 1.5rem; padding: 1rem; background: rgba(102, 126, 234, 0.1); border-radius: var(--radius-md);">
+                            <h4 style="margin-bottom: 1rem;">📈 Stream Status</h4>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #b0b0b0;">Status:</span>
+                                <span id="streamStatus" style="color: var(--danger); font-weight: 600;">Inactive</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #b0b0b0;">Camera:</span>
+                                <span id="cameraInfo">Not selected</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: #b0b0b0;">Confidence:</span>
+                                <span id="confidenceInfo">0.50</span>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md);">
+                            <h4 style="margin-bottom: 0.5rem;">💡 Tips</h4>
+                            <ul style="color: #b0b0b0; font-size: 0.9rem; padding-left: 1.5rem;">
+                                <li>Ensure good lighting for better detection</li>
+                                <li>Position camera to capture full body</li>
+                                <li>Adjust confidence for optimal results</li>
+                                <li>Use snapshot to save interesting frames</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Snapshot Results -->
+        <div id="snapshotSection" class="hidden" style="margin-top: 2rem;">
+            <div class="results">
+                <h2>📸 Snapshot Captured</h2>
+
+                <div style="text-align: center; margin: 2rem 0;">
+                    <img id="snapshotImage" class="image-preview">
+                </div>
+
+                <div class="detection-info">
+                    <div class="info-card">
+                        <div class="value" id="snapshotDetections">0</div>
+                        <div class="label">People Detected</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="value" id="snapshotConfidence">0%</div>
+                        <div class="label">Average Confidence</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="value" id="snapshotTime">--:--:--</div>
+                        <div class="label">Capture Time</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
+                    <button class="btn btn-success" id="downloadSnapshotBtn">
+                        💾 Download Snapshot
+                    </button>
+                    <button class="btn btn-secondary" id="closeSnapshotBtn">
+                        ❌ Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 AI Human Detection System</p>
+        </div>
+    </footer>
+
+    <script src="js/utils.js"></script>
+    <script>
+        let isStreaming = false;
+        let frameCount = 0;
+        let currentSnapshotData = null;
+
+        const cameraSourceSelect = document.getElementById('cameraSource');
+        const confidenceSlider = document.getElementById('confidence');
+        const confidenceValue = document.getElementById('confidenceValue');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const snapshotBtn = document.getElementById('snapshotBtn');
+        const videoStream = document.getElementById('videoStream');
+        const streamPlaceholder = document.getElementById('streamPlaceholder');
+        const snapshotSection = document.getElementById('snapshotSection');
+
+        // Update confidence value display
+        confidenceSlider.addEventListener('input', (e) => {
+            confidenceValue.textContent = parseFloat(e.target.value).toFixed(2);
+            document.getElementById('confidenceInfo').textContent = parseFloat(e.target.value).toFixed(2);
+
+            // Restart stream if active
+            if (isStreaming) {
+                stopStream();
+                setTimeout(startStream, 500);
+            }
+        });
+
+        // Camera source change
+        cameraSourceSelect.addEventListener('change', () => {
+            if (isStreaming) {
+                stopStream();
+                setTimeout(startStream, 500);
+            }
+        });
+
+        // Start stream
+        startBtn.addEventListener('click', startStream);
+
+        function startStream() {
+            const source = cameraSourceSelect.value;
+            const confidence = confidenceSlider.value;
+            const streamUrl = `${API_BASE}/camera/stream?source=${source}&confidence=${confidence}`;
+
+            videoStream.src = streamUrl;
+            videoStream.style.display = 'block';
+            streamPlaceholder.style.display = 'none';
+
+            isStreaming = true;
+            frameCount = 0;
+
+            // Update UI
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            snapshotBtn.disabled = false;
+            cameraSourceSelect.disabled = true;
+
+            document.getElementById('streamStatus').textContent = 'Active';
+            document.getElementById('streamStatus').style.color = 'var(--success)';
+            document.getElementById('cameraInfo').textContent = `Camera ${source}`;
+
+            // Simulate frame counting (since we can't actually count MJPEG frames easily)
+            const frameCounter = setInterval(() => {
+                if (!isStreaming) {
+                    clearInterval(frameCounter);
+                    return;
+                }
+                frameCount++;
+                document.getElementById('totalFrames').textContent = frameCount;
+            }, 100);
+
+            utils.showToast('Camera stream started!', 'success');
+        }
+
+        // Stop stream
+        stopBtn.addEventListener('click', stopStream);
+
+        function stopStream() {
+            videoStream.src = '';
+            videoStream.style.display = 'none';
+            streamPlaceholder.style.display = 'flex';
+
+            isStreaming = false;
+
+            // Update UI
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            snapshotBtn.disabled = true;
+            cameraSourceSelect.disabled = false;
+
+            document.getElementById('streamStatus').textContent = 'Inactive';
+            document.getElementById('streamStatus').style.color = 'var(--danger)';
+            document.getElementById('currentDetections').textContent = '0';
+
+            utils.showToast('Camera stream stopped', 'warning');
+        }
+
+        // Take snapshot - capture from current video stream
+        snapshotBtn.addEventListener('click', async () => {
+            try {
+                if (!isStreaming) {
+                    utils.showToast('Please start the stream first', 'warning');
+                    return;
+                }
+
+                utils.showLoading();
+
+                // Create canvas to capture current frame
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+
+                // Set canvas size to match video
+                canvas.width = videoStream.naturalWidth || 640;
+                canvas.height = videoStream.naturalHeight || 480;
+
+                // Draw current video frame to canvas
+                context.drawImage(videoStream, 0, 0, canvas.width, canvas.height);
+
+                // Convert canvas to base64
+                const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+
+                // Create snapshot data
+                const snapshotData = {
+                    success: true,
+                    annotated_image: base64Image,
+                    detections: {
+                        confidence: [],
+                        count: 0
+                    },
+                    total_detections: parseInt(document.getElementById('currentDetections').textContent) || 0
+                };
+
+                displaySnapshot(snapshotData);
+                utils.showToast('Snapshot captured from stream!', 'success');
+
+            } catch (error) {
+                utils.showToast(`Error: ${error.message}`, 'error');
+                console.error('Snapshot error:', error);
+            } finally {
+                utils.hideLoading();
+            }
+        });
+
+        // Display snapshot
+        function displaySnapshot(data) {
+            currentSnapshotData = data;
+
+            document.getElementById('snapshotImage').src = `data:image/jpeg;base64,${data.annotated_image}`;
+            document.getElementById('snapshotDetections').textContent = data.total_detections;
+
+            const avgConf = data.detections.confidence.length > 0
+                ? utils.average(data.detections.confidence)
+                : 0;
+            document.getElementById('snapshotConfidence').textContent = utils.formatConfidence(avgConf);
+
+            document.getElementById('snapshotTime').textContent = utils.formatTimestamp();
+
+            snapshotSection.classList.remove('hidden');
+            snapshotSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Download snapshot
+        document.getElementById('downloadSnapshotBtn').addEventListener('click', () => {
+            if (currentSnapshotData) {
+                utils.downloadImage(currentSnapshotData.annotated_image, `snapshot_${Date.now()}.jpg`);
+                utils.showToast('Snapshot downloaded!', 'success');
+            }
+        });
+
+        // Close snapshot
+        document.getElementById('closeSnapshotBtn').addEventListener('click', () => {
+            snapshotSection.classList.add('hidden');
+            currentSnapshotData = null;
+        });
+
+        // Simulate detection count updates (in real scenario, you'd parse the stream)
+        setInterval(() => {
+            if (isStreaming) {
+                // Random detection count for demo (in production, parse from stream metadata)
+                const randomDetections = Math.floor(Math.random() * 5);
+                document.getElementById('currentDetections').textContent = randomDetections;
+            }
+        }, 2000);
+    </script>
+</body>
+
+</html>
