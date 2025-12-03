@@ -8,7 +8,8 @@ from api.functions import (
     detect_badge_by_image,
     detect_badge_from_camera,
     detect_badge_from_camera_single_frame,
-    detect_combined_from_camera
+    detect_combined_from_camera,
+    detect_combined_by_image
 )
 import base64
 import os
@@ -227,6 +228,46 @@ async def badge_snapshot(source: int = Query(0), confidence: float = Query(0.5))
 # ============================================================
 # COMBINED DETECTION ENDPOINT
 # ============================================================
+
+@app.post("/detect_combined_by_image")
+async def detect_combined_by_image_api(file: UploadFile = File(...)):
+    """
+    Detect both humans and badges in an image
+    
+    - **file**: File ảnh upload (JPEG, PNG, etc.)
+    
+    Returns:
+    - **annotated_image**: Ảnh với green boxes (humans) và blue boxes (badges)
+    - **human_count**: Số người phát hiện
+    - **badge_count**: Số badge phát hiện
+    """
+    try:
+        image_bytes = await file.read()
+        
+        annotated_bytes, result_json = detect_combined_by_image(image_bytes)
+        
+        # Encode annotated image to base64
+        annotated_base64 = base64.b64encode(annotated_bytes).decode('utf-8')
+        
+        return {
+            "success": True,
+            "annotated_image": annotated_base64,
+            "human_count": result_json.get("human_count", 0),
+            "badge_count": result_json.get("badge_count", 0),
+            "total_detections": result_json.get("total_detections", 0),
+            "human_confidence": result_json.get("human_confidence", []),
+            "badge_confidence": result_json.get("badge_confidence", [])
+        }
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": str(e)}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Internal server error: {str(e)}"}
+        )
 
 @app.get("/combined/stream")
 async def combined_stream(source: int = Query(0), confidence: float = Query(0.5)):

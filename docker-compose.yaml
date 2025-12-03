@@ -11,13 +11,13 @@ services:
     devices:
       - /dev/video0:/dev/video0
     privileged: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     environment:
       - PYTHONUNBUFFERED=1
     command: uvicorn api.main:app --host 0.0.0.0 --port 6034 --reload
@@ -29,12 +29,14 @@ services:
     container_name: ui-frontend
     ports:
       - "6033:6033"
+      - "6034:6034"
     networks:
       - detection-network
     depends_on:
       - ai-backend
     volumes:
       - ./ui:/usr/share/nginx/html:ro
+      - ./ui/ssl:/etc/nginx/ssl:ro
 
 networks:
   detection-network:

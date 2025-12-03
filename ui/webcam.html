@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Detection - AI Human Detection</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">🤖 AI Detection</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="upload.html">Human Detection</a></li>
+                <li><a href="webcam.html">Webcam Detection</a></li>
+                <li><a href="webcam-badge.html">Badge Detection</a></li>
+                <li><a href="webcam-combined.html">Combined Detection</a></li>
+                <li><a href="/docs" target="_blank">API Docs</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container" style="padding: 3rem 1.5rem; min-height: 80vh;">
+        <div style="text-align: center; margin-bottom: 3rem;">
+            <h1>📷 Webcam Detection (Client-Side)</h1>
+            <p style="color: #b0b0b0; font-size: 1.2rem;">
+                Use your device's camera for AI-powered human detection
+            </p>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="controls">
+            <h3>⚙️ Webcam Settings</h3>
+
+            <div class="grid grid-2">
+                <div class="control-group">
+                    <label for="captureInterval">
+                        ⏱️ Capture Interval (ms)
+                    </label>
+                    <input type="number" id="captureInterval" min="100" max="5000" step="100" value="500">
+                    <p style="color: #888; font-size: 0.85rem; margin-top: 0.5rem;">
+                        Time between captures (lower = more frequent)
+                    </p>
+                </div>
+
+                <div class="control-group">
+                    <label for="confidence">
+                        🎯 Confidence Threshold
+                        <span class="range-value" id="confidenceValue">0.50</span>
+                    </label>
+                    <input type="range" id="confidence" min="0" max="1" step="0.05" value="0.5">
+                    <p style="color: #888; font-size: 0.85rem; margin-top: 0.5rem;">
+                        Higher values = fewer but more confident detections
+                    </p>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="startBtn">
+                    ▶️ Start Webcam
+                </button>
+                <button class="btn btn-secondary" id="stopBtn" disabled>
+                    ⏹️ Stop Webcam
+                </button>
+                <button class="btn btn-success" id="snapshotBtn" disabled>
+                    📸 Capture & Detect
+                </button>
+                <button class="btn btn-success" id="toggleAutoBtn" disabled>
+                    🔄 Enable Auto-Detect
+                </button>
+            </div>
+        </div>
+
+        <!-- Video Section -->
+        <div style="margin-top: 2rem;">
+            <div class="grid grid-video-layout">
+                <!-- Webcam Display -->
+                <div>
+                    <div class="card">
+                        <h3>📹 Your Webcam</h3>
+                        <div class="video-container" style="margin-top: 1rem; position: relative;">
+                            <video id="webcamVideo" autoplay playsinline style="display: none; width: 100%; border-radius: var(--radius-md);"></video>
+                            <canvas id="detectionCanvas" style="display: none; width: 100%; border-radius: var(--radius-md);"></canvas>
+                            <div id="videoPlaceholder"
+                                style="aspect-ratio: 16/9; background: rgba(0,0,0,0.5); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">📷</div>
+                                <p style="color: #888;">Click "Start Webcam" to begin</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Panel -->
+                <div>
+                    <div class="card">
+                        <h3>📊 Real-time Statistics</h3>
+
+                        <div class="detection-info" style="margin-top: 1.5rem;">
+                            <div class="info-card">
+                                <div class="value" id="currentDetections">0</div>
+                                <div class="label">Current Detections</div>
+                            </div>
+
+                            <div class="info-card">
+                                <div class="value" id="totalFrames">0</div>
+                                <div class="label">Frames Processed</div>
+                            </div>
+
+                            <div class="info-card">
+                                <div class="value" id="avgConfidence">0%</div>
+                                <div class="label">Avg Confidence</div>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top: 1.5rem; padding: 1rem; background: rgba(102, 126, 234, 0.1); border-radius: var(--radius-md);">
+                            <h4 style="margin-bottom: 1rem;">📈 Status</h4>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #b0b0b0;">Webcam:</span>
+                                <span id="webcamStatus" style="color: var(--danger); font-weight: 600;">Inactive</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #b0b0b0;">Auto-Detect:</span>
+                                <span id="autoDetectStatus" style="color: var(--danger); font-weight: 600;">Off</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: #b0b0b0;">Confidence:</span>
+                                <span id="confidenceInfo">0.50</span>
+                            </div>
+                        </div>
+
+                        <div
+                            style="margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md);">
+                            <h4 style="margin-bottom: 0.5rem;">💡 Tips</h4>
+                            <ul style="color: #b0b0b0; font-size: 0.9rem; padding-left: 1.5rem;">
+                                <li>Allow camera access when prompted</li>
+                                <li>Ensure good lighting for better detection</li>
+                                <li>Position yourself in frame</li>
+                                <li>Adjust interval for performance vs accuracy</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Latest Detection Results -->
+        <div id="resultsSection" class="hidden" style="margin-top: 2rem;">
+            <div class="results">
+                <h2>🎯 Latest Detection Result</h2>
+
+                <div style="text-align: center; margin: 2rem 0;">
+                    <img id="resultImage" class="image-preview">
+                </div>
+
+                <div class="detection-info">
+                    <div class="info-card">
+                        <div class="value" id="resultDetections">0</div>
+                        <div class="label">People Detected</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="value" id="resultConfidence">0%</div>
+                        <div class="label">Average Confidence</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="value" id="resultTime">--:--:--</div>
+                        <div class="label">Detection Time</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
+                    <button class="btn btn-success" id="downloadResultBtn">
+                        💾 Download Result
+                    </button>
+                    <button class="btn btn-secondary" id="closeResultBtn">
+                        ❌ Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 AI Human Detection System</p>
+        </div>
+    </footer>
+
+    <script src="js/utils.js"></script>
+    <script>
+        let webcamStream = null;
+        let isWebcamActive = false;
+        let autoDetectInterval = null;
+        let frameCount = 0;
+        let currentResultData = null;
+        let allConfidences = [];
+
+        const webcamVideo = document.getElementById('webcamVideo');
+        const detectionCanvas = document.getElementById('detectionCanvas');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const snapshotBtn = document.getElementById('snapshotBtn');
+        const confidenceSlider = document.getElementById('confidence');
+        const confidenceValue = document.getElementById('confidenceValue');
+        const captureIntervalInput = document.getElementById('captureInterval');
+        const resultsSection = document.getElementById('resultsSection');
+
+        // Update confidence value display
+        confidenceSlider.addEventListener('input', (e) => {
+            confidenceValue.textContent = parseFloat(e.target.value).toFixed(2);
+            document.getElementById('confidenceInfo').textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
+        // Start webcam
+        startBtn.addEventListener('click', async () => {
+            try {
+                utils.showLoading('Accessing webcam...');
+                
+                // Request webcam access
+                webcamStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    }
+                });
+
+                webcamVideo.srcObject = webcamStream;
+                webcamVideo.style.display = 'block';
+                detectionCanvas.style.display = 'none';
+                videoPlaceholder.style.display = 'none';
+
+                isWebcamActive = true;
+                frameCount = 0;
+                allConfidences = [];
+
+                // Update UI
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                snapshotBtn.disabled = false;
+                toggleAutoBtn.disabled = false;
+
+                document.getElementById('webcamStatus').textContent = 'Active';
+                document.getElementById('webcamStatus').style.color = 'var(--success)';
+                document.getElementById('autoDetectStatus').textContent = 'Off';
+                document.getElementById('autoDetectStatus').style.color = 'var(--danger)';
+
+                utils.showToast('Webcam started successfully!', 'success');
+
+            } catch (error) {
+                console.error('Webcam error:', error);
+                utils.showToast(`Failed to access webcam: ${error.message}`, 'error');
+            } finally {
+                utils.hideLoading();
+            }
+        });
+
+        // Stop webcam
+        stopBtn.addEventListener('click', stopWebcam);
+
+        function stopWebcam() {
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamStream = null;
+            }
+
+            if (autoDetectInterval) {
+                clearInterval(autoDetectInterval);
+                autoDetectInterval = null;
+            }
+
+            webcamVideo.style.display = 'none';
+            detectionCanvas.style.display = 'none';
+            videoPlaceholder.style.display = 'flex';
+
+            isWebcamActive = false;
+
+            // Update UI
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            snapshotBtn.disabled = true;
+            toggleAutoBtn.disabled = true;
+            toggleAutoBtn.textContent = '🔄 Enable Auto-Detect';
+            toggleAutoBtn.classList.remove('btn-danger');
+            toggleAutoBtn.classList.add('btn-success');
+
+            document.getElementById('webcamStatus').textContent = 'Inactive';
+            document.getElementById('webcamStatus').style.color = 'var(--danger)';
+            document.getElementById('autoDetectStatus').textContent = 'Off';
+            document.getElementById('autoDetectStatus').style.color = 'var(--danger)';
+            document.getElementById('currentDetections').textContent = '0';
+
+            utils.showToast('Webcam stopped', 'warning');
+        }
+
+        // Toggle auto-detect
+        const toggleAutoBtn = document.getElementById('toggleAutoBtn');
+        toggleAutoBtn.addEventListener('click', () => {
+            if (autoDetectInterval) {
+                // Stop auto-detect
+                clearInterval(autoDetectInterval);
+                autoDetectInterval = null;
+                toggleAutoBtn.textContent = '🔄 Enable Auto-Detect';
+                toggleAutoBtn.classList.remove('btn-danger');
+                toggleAutoBtn.classList.add('btn-success');
+                document.getElementById('autoDetectStatus').textContent = 'Off';
+                document.getElementById('autoDetectStatus').style.color = 'var(--danger)';
+                utils.showToast('Auto-detect disabled', 'info');
+            } else {
+                // Start auto-detect
+                const interval = parseInt(captureIntervalInput.value);
+                autoDetectInterval = setInterval(() => {
+                    captureAndDetect();
+                }, interval);
+                toggleAutoBtn.textContent = '⏸️ Disable Auto-Detect';
+                toggleAutoBtn.classList.remove('btn-success');
+                toggleAutoBtn.classList.add('btn-danger');
+                document.getElementById('autoDetectStatus').textContent = 'On';
+                document.getElementById('autoDetectStatus').style.color = 'var(--success)';
+                utils.showToast('Auto-detect enabled!', 'success');
+            }
+        });
+
+        // Capture and detect
+        snapshotBtn.addEventListener('click', async () => {
+            if (!isWebcamActive) {
+                utils.showToast('Please start webcam first', 'warning');
+                return;
+            }
+
+            await captureAndDetect();
+        });
+
+        async function captureAndDetect() {
+            if (!isWebcamActive) return;
+            
+            try {
+                // Only show loading if not auto-detecting
+                if (!autoDetectInterval) {
+                    utils.showLoading('Processing...');
+                }
+
+                // Create canvas and capture frame
+                const canvas = document.createElement('canvas');
+                canvas.width = webcamVideo.videoWidth;
+                canvas.height = webcamVideo.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(webcamVideo, 0, 0);
+
+                // Convert to blob
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+
+                // Send to backend
+                const formData = new FormData();
+                formData.append('file', blob, 'webcam.jpg');
+
+                const response = await fetch(`${API_BASE}/detect_human_by_image`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    frameCount++;
+                    document.getElementById('totalFrames').textContent = frameCount;
+                    document.getElementById('currentDetections').textContent = data.total_detections;
+
+                    // Update average confidence
+                    if (data.detections && data.detections.confidence) {
+                        allConfidences = allConfidences.concat(data.detections.confidence);
+                        const avgConf = allConfidences.length > 0
+                            ? allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length
+                            : 0;
+                        document.getElementById('avgConfidence').textContent = utils.formatConfidence(avgConf);
+                    }
+
+                    // Display result
+                    displayResult(data);
+
+                    // Only show toast if not auto-detecting
+                    if (!autoDetectInterval) {
+                        utils.showToast(`Detected ${data.total_detections} person(s)`, 'success');
+                    }
+                } else {
+                    throw new Error(data.error || 'Detection failed');
+                }
+
+            } catch (error) {
+                console.error('Detection error:', error);
+                // Only show error toast if not auto-detecting
+                if (!autoDetectInterval) {
+                    utils.showToast(`Error: ${error.message}`, 'error');
+                }
+            } finally {
+                // Only hide loading if not auto-detecting
+                if (!autoDetectInterval) {
+                    utils.hideLoading();
+                }
+            }
+        }
+
+        // Display result
+        function displayResult(data) {
+            currentResultData = data;
+
+            document.getElementById('resultImage').src = `data:image/jpeg;base64,${data.annotated_image}`;
+            document.getElementById('resultDetections').textContent = data.total_detections;
+
+            const avgConf = data.detections.confidence.length > 0
+                ? utils.average(data.detections.confidence)
+                : 0;
+            document.getElementById('resultConfidence').textContent = utils.formatConfidence(avgConf);
+
+            document.getElementById('resultTime').textContent = utils.formatTimestamp();
+
+            resultsSection.classList.remove('hidden');
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Download result
+        document.getElementById('downloadResultBtn').addEventListener('click', () => {
+            if (currentResultData) {
+                utils.downloadImage(currentResultData.annotated_image, `webcam_detection_${Date.now()}.jpg`);
+                utils.showToast('Result downloaded!', 'success');
+            }
+        });
+
+        // Close result
+        document.getElementById('closeResultBtn').addEventListener('click', () => {
+            resultsSection.classList.add('hidden');
+        });
+
+        // Check if webcam is supported
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            utils.showToast('Webcam is not supported in your browser', 'error');
+            startBtn.disabled = true;
+        }
+    </script>
+</body>
+
+</html>

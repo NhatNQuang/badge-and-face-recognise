@@ -306,6 +306,71 @@ def detect_badge_by_image(image_bytes: bytes):
         "confidence": conf
     }
 
+# Combined Detection Function: Detect both humans and badges in an image
+def detect_combined_by_image(image_bytes: bytes):
+    """
+    Detect both humans and badges in an uploaded image
+    Returns annotated image with green boxes for humans, blue boxes for badges
+    """
+    img = check_image_bytes(image_bytes)
+    img_np = np.array(img)  # RGB format from PIL
+
+    # Detect humans (class 0 = person) - YOLO works with RGB
+    human_results = model(img_np, classes=[0])
+    
+    # Detect badges - YOLO works with RGB
+    badge_results = badge_model(img_np)
+
+    # Convert to BGR for OpenCV drawing
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+    # Draw green boxes for humans
+    human_boxes = human_results[0].boxes
+    if len(human_boxes) > 0:
+        for box in human_boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+            conf = float(box.conf[0].cpu().numpy())
+            # Draw green box (BGR format: Green = 0, 255, 0)
+            cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            label = f"Person {conf:.2f}"
+            cv2.putText(img_bgr, label, (x1, y1 - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    # Draw blue boxes for badges
+    badge_boxes = badge_results[0].boxes
+    if len(badge_boxes) > 0:
+        for box in badge_boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+            conf = float(box.conf[0].cpu().numpy())
+            cls = int(box.cls[0].cpu().numpy())
+            class_name = badge_results[0].names[cls]
+            # Draw blue box (BGR format: Blue = 255, 0, 0)
+            cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            label = f"{class_name} {conf:.2f}"
+            cv2.putText(img_bgr, label, (x1, y1 - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+    # Convert BGR back to RGB for PIL/JPEG
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    annotated_pil = Image.fromarray(img_rgb)
+    buf = io.BytesIO()
+    annotated_pil.save(buf, format='JPEG')
+
+    # Extract detection data
+    human_count = len(human_boxes)
+    badge_count = len(badge_boxes)
+
+    human_conf = human_boxes.conf.cpu().numpy().tolist() if len(human_boxes) > 0 else []
+    badge_conf = badge_boxes.conf.cpu().numpy().tolist() if len(badge_boxes) > 0 else []
+
+    return buf.getvalue(), {
+        "human_count": human_count,
+        "badge_count": badge_count,
+        "human_confidence": human_conf,
+        "badge_confidence": badge_conf,
+        "total_detections": human_count + badge_count
+    }
+
 # Function 05: Detect Badge From Real-time Camera
 def detect_badge_from_camera(camera_source=0, confidence_threshold=0.5):
     """
