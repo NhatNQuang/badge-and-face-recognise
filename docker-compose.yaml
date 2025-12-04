@@ -39,6 +39,7 @@ services:
     volumes:
       - ./ui:/usr/share/nginx/html:ro
       - ./ui/ssl:/etc/nginx/ssl:ro
+      
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6033"]
       interval: 30s
