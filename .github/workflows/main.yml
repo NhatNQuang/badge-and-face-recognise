@@ -49,7 +49,7 @@ jobs:
           echo "=== Test SSH Connection ==="
           ssh -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
-              -p ${{ secrets.VM_PORT }} \
+              -p ${{ secrets.VM_SSH_PORT }} \
               ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
               "echo 'SSH OK • $(whoami)@$(hostname)' && uptime" || exit 1
 
@@ -58,7 +58,7 @@ jobs:
               -o UserKnownHostsFile=/dev/null \
               -o ServerAliveInterval=60 \
               -o ServerAliveCountMax=3 \
-              -p ${{ secrets.VM_PORT }} \
+              -p ${{ secrets.VM_SSH_PORT }} \
               ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'EOF'
             set -e
             echo "→ Navigating to project directory"
