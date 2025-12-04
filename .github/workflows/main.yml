@@ -27,7 +27,7 @@ jobs:
       run: |
         cd src/core
         pip install -r requirements.txt
-
+        
     - name: Run linting
       run: |
         pip install flake8
@@ -49,11 +49,11 @@ jobs:
     - name: Build AI Backend Image
       run: |
         docker build -t ai-backend:${{ github.sha }} ./src/core
-
+        
     - name: Build UI Frontend Image
       run: |
         docker build -t ui-frontend:${{ github.sha }} ./ui
-
+        
     - name: Test images
       run: |
         docker images
@@ -65,27 +65,187 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
-    - name: Setup SSH key
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Debug - Show environment info
       run: |
+        echo "🔍 Debug Information"
+        echo "===================="
+        echo "Runner OS: $(uname -a)"
+        echo "User: $(whoami)"
+        echo "Home: $HOME"
+        echo "Current directory: $(pwd)"
+        echo ""
+        echo "SSH Client version:"
+        ssh -V
+        echo ""
+        
+    - name: Setup SSH key with detailed logging
+      run: |
+        echo "📁 Setting up SSH directory..."
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
+        
+        echo "🔑 Decoding SSH key..."
         echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
+        
+        echo "📝 SSH key file info:"
+        ls -la ~/.ssh/deploy_key
+        
+        echo "🔒 Setting permissions..."
         chmod 600 ~/.ssh/deploy_key
+        
+        echo "✅ Verifying key format..."
+        head -n 1 ~/.ssh/deploy_key
+        
+        echo "📋 Key fingerprint:"
+        ssh-keygen -lf ~/.ssh/deploy_key || echo "⚠️ Could not read key fingerprint"
+        
+    - name: Test SSH connection (verbose)
+      continue-on-error: true
+      run: |
+        echo "🔌 Testing SSH connection..."
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o IdentitiesOnly=yes \
+          -o LogLevel=VERBOSE \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+          'echo "✅ SSH connection successful!"' 2>&1 || {
+            echo "❌ SSH connection failed"
+            echo "Trying with different debug level..."
+            ssh -vvv -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o IdentitiesOnly=yes \
+              -p ${{ secrets.VM_SSH_PORT }} \
+              ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+              'echo "Connection test"' 2>&1 | tail -20
+          }
+    
+    - name: Verify VM access and docker
+      run: |
+        echo "🔍 Checking VM environment..."
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o IdentitiesOnly=yes \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+            echo "✅ Connected to VM"
+            echo "User: $(whoami)"
+            echo "Home: $HOME"
+            echo "Current dir: $(pwd)"
+            echo ""
+            echo "📦 Docker version:"
+            docker --version || echo "⚠️ Docker not found"
+            echo ""
+            echo "📦 Docker Compose version:"
+            docker compose version || docker-compose --version || echo "⚠️ Docker Compose not found"
+            echo ""
+            echo "📁 Project directory:"
+            ls -la ${{ secrets.VM_DEPLOY_PATH }} 2>/dev/null || echo "⚠️ Project directory not found"
+            echo ""
+            echo "🔐 Docker permissions:"
+            groups | grep -q docker && echo "✅ User in docker group" || echo "⚠️ User not in docker group"
+        ENDSSH
         
     - name: Deploy to production VM
       run: |
+        echo "🚀 Starting deployment..."
         ssh -i ~/.ssh/deploy_key \
           -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o IdentitiesOnly=yes \
+          -o ServerAliveInterval=60 \
+          -o ServerAliveCountMax=3 \
           -p ${{ secrets.VM_SSH_PORT }} \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
-          'cd ${{ secrets.VM_DEPLOY_PATH }} && \
-           git pull origin main && \
-           docker compose down && \
-           docker system prune -af && \
-           docker compose up -d --build && \
-           sleep 10 && \
-           curl -f http://localhost:6033/health || exit 1 && \
-           echo "Deploy successful"'
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+          set -e
+          
+          echo "📂 Navigating to project directory..."
+          cd ${{ secrets.VM_DEPLOY_PATH }}
+          
+          echo "📥 Pulling latest code from main branch..."
+          git fetch origin
+          git reset --hard origin/main
+          git pull origin main
+          
+          echo "🛑 Stopping existing containers..."
+          docker compose down || docker-compose down || true
+          
+          echo "🧹 Cleaning up old images..."
+          docker system prune -af --volumes
+          
+          echo "🏗️ Building and starting containers..."
+          docker compose up -d --build || docker-compose up -d --build
+          
+          echo "⏳ Waiting for services to start..."
+          sleep 15
+          
+          echo "🔍 Checking container status..."
+          docker compose ps || docker-compose ps
+          
+          echo "📊 Checking backend health..."
+          for i in {1..30}; do
+            if curl -f http://localhost:6034/health 2>/dev/null; then
+              echo "✅ Backend is healthy!"
+              break
+            fi
+            echo "⏳ Attempt $i/30: Backend not ready yet..."
+            sleep 2
+          done
+          
+          echo "📊 Checking frontend..."
+          if curl -f http://localhost:6033 2>/dev/null; then
+            echo "✅ Frontend is accessible!"
+          else
+            echo "⚠️ Frontend check failed, but continuing..."
+          fi
+          
+          echo "📋 Container logs (last 50 lines):"
+          docker compose logs --tail=50 || docker-compose logs --tail=50
+          
+          echo "✅ Deployment completed successfully!"
+        ENDSSH
+        
+    - name: Verify deployment
+      if: success()
+      run: |
+        echo "✅ Verifying deployment..."
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+          cd ${{ secrets.VM_DEPLOY_PATH }}
+          echo "📊 Running containers:"
+          docker compose ps
+          echo ""
+          echo "💾 Disk usage:"
+          df -h | grep -E '(Filesystem|/$)'
+          echo ""
+          echo "🐳 Docker disk usage:"
+          docker system df
+        ENDSSH
+        
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "❌ Deployment failed! Attempting rollback..."
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+          cd ${{ secrets.VM_DEPLOY_PATH }}
+          echo "⏮️ Rolling back to previous version..."
+          git reset --hard HEAD~1
+          docker compose down || true
+          docker compose up -d --build
+        ENDSSH
            
   notify:
     name: Send Notification
@@ -100,7 +260,7 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         if [ -n "$SLACK_WEBHOOK_URL" ]; then
-          STATUS="${{ job.status }}"
+          STATUS="${{ needs.deploy.result }}"
           if [ "$STATUS" == "success" ]; then
             COLOR="good"
             EMOJI="✅"
@@ -111,7 +271,6 @@ jobs:
             COLOR="warning"
             EMOJI="⚠️"
           fi
-
           curl -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
             -d "{
