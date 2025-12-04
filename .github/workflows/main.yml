@@ -65,33 +65,28 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        
     - name: Deploy to production VM
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_USERNAME }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        port: ${{secrets.VM_SSH_PORT }}
-        script: |
-          cd ${{ secrets.VM_DEPLOY_PATH }}
-
-          # Pull latest code
-          git pull origin main
-
-          # Stop services
-          docker compose down
-
-          # Remove old images
-          docker system prune -af
-
-          # Rebuild and restart
-          docker compose up -d --build
-
-          # Check health
-          sleep 10
-          curl -f http://localhost:6033/health || exit 1
-          echo "Deploy successful"
-  
+      run: |
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+          'cd ${{ secrets.VM_DEPLOY_PATH }} && \
+           git pull origin main && \
+           docker compose down && \
+           docker system prune -af && \
+           docker compose up -d --build && \
+           sleep 10 && \
+           curl -f http://localhost:6033/health || exit 1 && \
+           echo "Deploy successful"'
+           
   notify:
     name: Send Notification
     runs-on: ubuntu-24.04
