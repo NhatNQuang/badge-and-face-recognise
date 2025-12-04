@@ -69,7 +69,8 @@ jobs:
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_SSH_KEY }}
+        username: ${{ secrets.VM_USERNAME }}
+        key: ${{ secrets.VM_SSH_KEY }}
         port: ${{secrets.VM_SSH_PORT }}
         script: |
           cd ${{ secrets.VM_DEPLOY_PATH }}
@@ -99,7 +100,7 @@ jobs:
 
     steps:
     - name: Send Gmail notification
-      if: secrets.SLACK_WEBHOOK != ''
+      if: $ {{secrets.SLACK_WEBHOOK}}
       uses: 8398a7/action-slack@v3
       with:
         status: ${{ job.status }}
