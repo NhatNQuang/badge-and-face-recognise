@@ -4,6 +4,7 @@ services:
       context: ./src/core
       dockerfile: Dockerfile
     container_name: ai-backend
+    restart: unless-stopped
     networks:
       - detection-network
     volumes:
@@ -11,33 +12,39 @@ services:
     devices:
       - /dev/video0:/dev/video0
     privileged: true
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
     environment:
       - PYTHONUNBUFFERED=1
     command: uvicorn api.main:app --host 0.0.0.0 --port 6034 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6034/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   ui-frontend:
     build:
       context: ./ui
       dockerfile: Dockerfile
     container_name: ui-frontend
+    restart: unless-stopped
     ports:
       - "6033:6033"
       - "6034:6034"
     networks:
       - detection-network
     depends_on:
-      - ai-backend
+      ai-backend:
+        condition: service_healthy
     volumes:
       - ./ui:/usr/share/nginx/html:ro
       - ./ui/ssl:/etc/nginx/ssl:ro
-
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6033"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
 networks:
   detection-network:
     driver: bridge

@@ -1,0 +1,111 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_COMPOSE_VERSION: 2.23.0
+
+jobs:
+  test: 
+    name: Run Tests
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout code and download the latest code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+      python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd src/core
+        pip install -r requirements.txt
+
+    - name: Run linting
+      run: |
+        pip install flake8
+        flake8 src/core --count --select=E9,F63,F7,F82 --show-source --statistics
+  
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-24.04
+    needs: test
+    if: github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build AI Backend Image
+      run: |
+        docker build -t ai-backend:${{ github.sha }} ./src/core
+
+    - name: Build UI Frontend Image
+      run: |
+        docker build -t ui-frontend:${{ github.sha }} ./ui
+
+    - name: Test images
+      run: |
+        docker images
+
+  deploy:
+    name: Deploy to VM
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Deploy to production VM
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_SSH_KEY }}
+        port: ${{secrets.VM_SSH_PORT }}
+        script: |
+          cd ${{ secrets.VM_DEPLOY_PATH }}
+
+          # Pull latest code
+          git pull origin main
+
+          # Stop services
+          docker compose down
+
+          # Remove old images
+          docker system prune -af
+
+          # Rebuild and restart
+          docker compose up -d --build
+
+          # Check health
+          sleep 10
+          curl -f http://localhost:6033/health || exit 1
+          echo "Deploy successful"
+  
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-24.04
+    needs: [test, build, deploy]
+    if: always()
+
+    steps:
+    - name: Send Gmail notification
+      if: secrets.SLACK_WEBHOOK != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          Deploy Status: ${{ job.status }}
+          Commit: ${{ github.sha }}
+          Author: ${{ github.actor }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
