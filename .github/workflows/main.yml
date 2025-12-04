@@ -1,27 +1,22 @@
-name: Debug SSH
+// filepath: /home/nguyenquangnhat/Documents/badge_detection/badge-and-face-recognise/.github/workflows/verify-key.yml
+name: Verify SSH Key
 
 on:
   workflow_dispatch:
 
 jobs:
-  debug:
+  verify:
     runs-on: ubuntu-24.04
     steps:
-    - name: Check SSH key format
+    - name: Check key format
       run: |
-        echo "Checking SSH key..."
-        echo "${{ secrets.VM_SSH_KEY }}" | head -n1
-        echo "${{ secrets.VM_SSH_KEY }}" | tail -n1
-        echo "Key length: $(echo '${{ secrets.VM_SSH_KEY }}' | wc -c)"
+        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d | head -n1
+        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d | tail -n1
         
-    - name: Test SSH with verbose
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_USERNAME }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        port: ${{ secrets.VM_SSH_PORT }}
-        debug: true
-        script: |
-          echo "Connected!"
-          whoami
+    - name: Test SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/key
+        chmod 600 ~/.ssh/key
+        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "echo '✅ SSH Works!'"
