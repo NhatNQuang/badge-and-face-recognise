@@ -21,7 +21,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-      python-version: '3.11'
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
@@ -69,7 +69,8 @@ jobs:
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_SSH_KEY }}
+        username: ${{ secrets.VM_USERNAME }}
+        key: ${{ secrets.VM_SSH_KEY }}
         port: ${{secrets.VM_SSH_PORT }}
         script: |
           cd ${{ secrets.VM_DEPLOY_PATH }}
@@ -98,14 +99,63 @@ jobs:
     if: always()
 
     steps:
-    - name: Send Gmail notification
-      if: secrets.SLACK_WEBHOOK != ''
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        text: |
-          Deploy Status: ${{ job.status }}
-          Commit: ${{ github.sha }}
-          Author: ${{ github.actor }}
-        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+    - name: Send Slack notification
+      continue-on-error: true
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ -n "$SLACK_WEBHOOK_URL" ]; then
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" == "success" ]; then
+            COLOR="good"
+            EMOJI="✅"
+          elif [ "$STATUS" == "failure" ]; then
+            COLOR="danger"
+            EMOJI="❌"
+          else
+            COLOR="warning"
+            EMOJI="⚠️"
+          fi
 
+          curl -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"$EMOJI CI/CD Pipeline $STATUS\",
+                \"fields\": [
+                  {
+                    \"title\": \"Status\",
+                    \"value\": \"$STATUS\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Branch\",
+                    \"value\": \"${{ github.ref_name }}\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Commit\",
+                    \"value\": \"<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Author\",
+                    \"value\": \"${{ github.actor }}\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Workflow\",
+                    \"value\": \"<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>\",
+                    \"short\": false
+                  }
+                ],
+                \"footer\": \"GitHub Actions\",
+                \"footer_icon\": \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\",
+                \"ts\": $(date +%s)
+              }]
+            }"
+          echo "✅ Slack notification sent"
+        else
+          echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping notification"
+        fi
