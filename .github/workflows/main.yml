@@ -2,7 +2,7 @@ name: Debug SSH
 
 on:
   workflow_dispatch:
-
+  
 jobs:
   debug:
     runs-on: ubuntu-24.04
