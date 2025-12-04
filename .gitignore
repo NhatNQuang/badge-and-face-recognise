@@ -41,7 +41,7 @@ tmp/
 temp/
 *.tmp
 # Models
-src/core/models/*.pt
+# src/core/models/*.pt
 !src/core/models/.gitkeep
 
 # Database and large files
