@@ -42,15 +42,13 @@ jobs:
           echo "=== SSH Setup ==="
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          
-          # ←←← CHỈ SỬA DÒNG NÀY: bỏ base64 -d đi
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/deploy_key
 
           echo "=== Test SSH Connection ==="
+          SSH_AUTH_SOCK=$SSH_AUTH_SOCK \
           ssh -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -p ${{ secrets.VM_SSH_PORT }} \
@@ -58,13 +56,13 @@ jobs:
               "echo 'SSH OK • $(whoami)@$(hostname)' && uptime" || exit 1
 
           echo "=== Starting Production Deployment ==="
+          SSH_AUTH_SOCK=$SSH_AUTH_SOCK \
           ssh -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -o ServerAliveInterval=60 \
               -o ServerAliveCountMax=3 \
               -p ${{ secrets.VM_SSH_PORT }} \
               ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'EOF'
-            # ... toàn bộ phần deploy giữ nguyên 100%
             set -e
             cd ${{ secrets.VM_DEPLOY_PATH }}
             git fetch --all
