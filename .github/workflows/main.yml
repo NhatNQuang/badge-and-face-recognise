@@ -1,27 +1,115 @@
-name: Debug SSH
+name: Test SSH Connection
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Chạy thủ công
 
 jobs:
-  debug:
+  test-ssh:
+    name: Test SSH to VM
     runs-on: ubuntu-24.04
+    
     steps:
+    - name: Check secrets existence
+      run: |
+        echo "Checking if secrets are configured..."
+        echo "VM_HOST exists: ${{ secrets.VM_HOST != '' }}"
+        echo "VM_USERNAME exists: ${{ secrets.VM_USERNAME != '' }}"
+        echo "VM_SSH_KEY exists: ${{ secrets.VM_SSH_KEY != '' }}"
+        echo "VM_SSH_PORT exists: ${{ secrets.VM_SSH_PORT != '' }}"
+        echo "VM_DEPLOY_PATH exists: ${{ secrets.VM_DEPLOY_PATH != '' }}"
+    
     - name: Check SSH key format
       run: |
-        echo "Checking SSH key..."
-        echo "${{ secrets.VM_SSH_KEY }}" | head -n1
-        echo "${{ secrets.VM_SSH_KEY }}" | tail -n1
-        echo "Key length: $(echo '${{ secrets.VM_SSH_KEY }}' | wc -c)"
+        echo "Checking SSH key format..."
+        KEY_LENGTH=$(echo "${{ secrets.VM_SSH_KEY }}" | wc -c)
+        echo "Key length: $KEY_LENGTH characters"
         
-    - name: Test SSH with verbose
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_USERNAME }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        port: ${{ secrets.VM_SSH_PORT }}
-        debug: true
-        script: |
-          echo "Connected!"
-          whoami
+        # Check if it's base64 encoded
+        if echo "${{ secrets.VM_SSH_KEY }}" | base64 -d >/dev/null 2>&1; then
+          echo "✅ Key appears to be base64 encoded"
+          echo "First line after decode:"
+          echo "${{ secrets.VM_SSH_KEY }}" | base64 -d | head -n1
+        else
+          echo "⚠️ Key is NOT base64 encoded (plain text)"
+          echo "First line:"
+          echo "${{ secrets.VM_SSH_KEY }}" | head -n1
+        fi
+    
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        
+        # Try to decode if base64, otherwise use as-is
+        if echo "${{ secrets.VM_SSH_KEY }}" | base64 -d >/dev/null 2>&1; then
+          echo "Decoding base64 key..."
+          echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
+        else
+          echo "Using plain text key..."
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+        fi
+        
+        chmod 600 ~/.ssh/deploy_key
+        
+        echo "✅ SSH key saved to ~/.ssh/deploy_key"
+    
+    - name: Test SSH connection
+      run: |
+        echo "🔌 Testing SSH connection..."
+        echo "Host: ${{ secrets.VM_HOST }}"
+        echo "User: ${{ secrets.VM_USERNAME }}"
+        echo "Port: ${{ secrets.VM_SSH_PORT }}"
+        
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=10 \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+          "echo '✅ SSH connection successful!' && \
+           echo 'Hostname:' && hostname && \
+           echo 'Current user:' && whoami && \
+           echo 'Current directory:' && pwd && \
+           echo 'Docker version:' && docker --version && \
+           echo 'Docker Compose version:' && docker compose version"
+    
+    - name: Test deployment path
+      run: |
+        echo "📁 Checking deployment path..."
+        
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+          "if [ -d '${{ secrets.VM_DEPLOY_PATH }}' ]; then \
+             echo '✅ Deploy path exists: ${{ secrets.VM_DEPLOY_PATH }}'; \
+             ls -la ${{ secrets.VM_DEPLOY_PATH }}; \
+           else \
+             echo '❌ Deploy path NOT found: ${{ secrets.VM_DEPLOY_PATH }}'; \
+             exit 1; \
+           fi"
+    
+    - name: Test Git repository
+      run: |
+        echo "🔍 Checking Git repository..."
+        
+        ssh -i ~/.ssh/deploy_key \
+          -o StrictHostKeyChecking=no \
+          -p ${{ secrets.VM_SSH_PORT }} \
+          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+          "cd ${{ secrets.VM_DEPLOY_PATH }} && \
+           echo 'Current branch:' && git branch --show-current && \
+           echo 'Latest commit:' && git log -1 --oneline && \
+           echo 'Git status:' && git status --short"
+    
+    - name: Summary
+      if: always()
+      run: |
+        echo "================================"
+        echo "🎯 SSH Connection Test Summary"
+        echo "================================"
+        echo "Host: ${{ secrets.VM_HOST }}"
+        echo "User: ${{ secrets.VM_USERNAME }}"
+        echo "Port: ${{ secrets.VM_SSH_PORT }}"
+        echo "Path: ${{ secrets.VM_DEPLOY_PATH }}"
+        echo "================================"
+        echo "✅ All tests passed! Ready for CI/CD setup."
