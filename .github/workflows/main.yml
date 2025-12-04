@@ -1,21 +1,161 @@
-name: Verify SSH Key
+name: CI/CD Pipeline
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_COMPOSE_VERSION: 2.23.0
 
 jobs:
-  verify:
+  test: 
+    name: Run Tests
     runs-on: ubuntu-24.04
+
     steps:
-    - name: Check key format
+    - name: Checkout code and download the latest code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
       run: |
-        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d | head -n1
-        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d | tail -n1
-        
-    - name: Test SSH
+        cd src/core
+        pip install -r requirements.txt
+
+    - name: Run linting
       run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/key
-        chmod 600 ~/.ssh/key
-        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "echo '✅ SSH Works!'"
+        pip install flake8
+        flake8 src/core --count --select=E9,F63,F7,F82 --show-source --statistics
+  
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-24.04
+    needs: test
+    if: github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build AI Backend Image
+      run: |
+        docker build -t ai-backend:${{ github.sha }} ./src/core
+
+    - name: Build UI Frontend Image
+      run: |
+        docker build -t ui-frontend:${{ github.sha }} ./ui
+
+    - name: Test images
+      run: |
+        docker images
+
+  deploy:
+    name: Deploy to VM
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Deploy to production VM
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USERNAME }}
+        key: ${{ secrets.VM_SSH_KEY }}
+        port: ${{secrets.VM_SSH_PORT }}
+        script: |
+          cd ${{ secrets.VM_DEPLOY_PATH }}
+
+          # Pull latest code
+          git pull origin main
+
+          # Stop services
+          docker compose down
+
+          # Remove old images
+          docker system prune -af
+
+          # Rebuild and restart
+          docker compose up -d --build
+
+          # Check health
+          sleep 10
+          curl -f http://localhost:6033/health || exit 1
+          echo "Deploy successful"
+  
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-24.04
+    needs: [test, build, deploy]
+    if: always()
+
+    steps:
+    - name: Send Slack notification
+      continue-on-error: true
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ -n "$SLACK_WEBHOOK_URL" ]; then
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" == "success" ]; then
+            COLOR="good"
+            EMOJI="✅"
+          elif [ "$STATUS" == "failure" ]; then
+            COLOR="danger"
+            EMOJI="❌"
+          else
+            COLOR="warning"
+            EMOJI="⚠️"
+          fi
+
+          curl -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"$EMOJI CI/CD Pipeline $STATUS\",
+                \"fields\": [
+                  {
+                    \"title\": \"Status\",
+                    \"value\": \"$STATUS\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Branch\",
+                    \"value\": \"${{ github.ref_name }}\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Commit\",
+                    \"value\": \"<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Author\",
+                    \"value\": \"${{ github.actor }}\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Workflow\",
+                    \"value\": \"<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>\",
+                    \"short\": false
+                  }
+                ],
+                \"footer\": \"GitHub Actions\",
+                \"footer_icon\": \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\",
+                \"ts\": $(date +%s)
+              }]
+            }"
+          echo "✅ Slack notification sent"
+        else
+          echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping notification"
+        fi
