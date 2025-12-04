@@ -1,5 +1,4 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches: [ main, develop ]
@@ -10,306 +9,212 @@ env:
   DOCKER_COMPOSE_VERSION: 2.23.0
 
 jobs:
-  test: 
+  test:
     name: Run Tests
     runs-on: ubuntu-24.04
-
     steps:
-    - name: Checkout code and download the latest code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        cd src/core
-        pip install -r requirements.txt
-        
-    - name: Run linting
-      run: |
-        pip install flake8
-        flake8 src/core --count --select=E9,F63,F7,F82 --show-source --statistics
-  
+      - name: Install dependencies
+        run: |
+          cd src/core
+          pip install -r requirements.txt
+
+      - name: Run linting
+        run: |
+          pip install flake8
+          flake8 src/core --count --select=E9,F63,F7,F82 --show-source --statistics
+
   build:
     name: Build Docker Images
     runs-on: ubuntu-24.04
     needs: test
     if: github.event_name == 'push'
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Build AI Backend Image
-      run: |
-        docker build -t ai-backend:${{ github.sha }} ./src/core
-        
-    - name: Build UI Frontend Image
-      run: |
-        docker build -t ui-frontend:${{ github.sha }} ./ui
-        
-    - name: Test images
-      run: |
-        docker images
+      - name: Build AI Backend Image
+        run: docker build -t ai-backend:${{ github.sha }} ./src/core
+
+      - name: Build UI Frontend Image
+        run: docker build -t ui-frontend:${{ github.sha }} ./ui
+
+      - name: List built images
+        run: docker images
 
   deploy:
-    name: Deploy to VM
+    name: Deploy to Production VM
     runs-on: ubuntu-24.04
     needs: build
     if: github.ref == 'refs/heads/main'
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Debug - Show environment info
-      run: |
-        echo "🔍 Debug Information"
-        echo "===================="
-        echo "Runner OS: $(uname -a)"
-        echo "User: $(whoami)"
-        echo "Home: $HOME"
-        echo "Current directory: $(pwd)"
-        echo ""
-        echo "SSH Client version:"
-        ssh -V
-        echo ""
-        
-    - name: Setup SSH key with detailed logging
-      run: |
-        echo "📁 Setting up SSH directory..."
-        mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
-        
-        echo "🔑 Decoding SSH key..."
-        echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
-        
-        echo "📝 SSH key file info:"
-        ls -la ~/.ssh/deploy_key
-        
-        echo "🔒 Setting permissions..."
-        chmod 600 ~/.ssh/deploy_key
-        
-        echo "✅ Verifying key format..."
-        head -n 1 ~/.ssh/deploy_key
-        
-        echo "📋 Key fingerprint:"
-        ssh-keygen -lf ~/.ssh/deploy_key || echo "⚠️ Could not read key fingerprint"
-        
-    - name: Test SSH connection (verbose)
-      continue-on-error: true
-      run: |
-        echo "🔌 Testing SSH connection..."
-        ssh -i ~/.ssh/deploy_key \
-          -o StrictHostKeyChecking=no \
-          -o UserKnownHostsFile=/dev/null \
-          -o IdentitiesOnly=yes \
-          -o LogLevel=VERBOSE \
-          -p ${{ secrets.VM_SSH_PORT }} \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
-          'echo "✅ SSH connection successful!"' 2>&1 || {
-            echo "❌ SSH connection failed"
-            echo "Trying with different debug level..."
-            ssh -vvv -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no \
+      - name: Setup SSH key (ROCK-SOLID METHOD)
+        run: |
+          echo "Setting up SSH directory..."
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          echo "Installing private key with strict 600 permissions..."
+          install -m 600 /dev/stdin ~/.ssh/deploy_key <<< "$(echo '${{ secrets.VM_SSH_KEY }}' | base64 -d)"
+
+          echo "Key installed. Final check:"
+          ls -la ~/.ssh/deploy_key
+          ssh-keygen -lf ~/.ssh/deploy_key
+
+          echo "Starting ssh-agent and adding key..."
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/deploy_key
+
+      - name: Test SSH connection to VM
+        run: |
+          echo "Testing SSH connection (this must succeed)..."
+          ssh -vvv \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=30 \
+            -p ${{ secrets.VM_SSH_PORT }} \
+            ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
+            "echo 'SSH CONNECTED SUCCESSFULLY!' && whoami && hostname && uptime"
+
+      - name: Verify VM access & environment
+        run: |
+          ssh -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
-              -o IdentitiesOnly=yes \
               -p ${{ secrets.VM_SSH_PORT }} \
-              ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} \
-              'echo "Connection test"' 2>&1 | tail -20
-          }
-    
-    - name: Verify VM access and docker
-      run: |
-        echo "🔍 Checking VM environment..."
-        ssh -i ~/.ssh/deploy_key \
-          -o StrictHostKeyChecking=no \
-          -o UserKnownHostsFile=/dev/null \
-          -o IdentitiesOnly=yes \
-          -p ${{ secrets.VM_SSH_PORT }} \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
-            echo "✅ Connected to VM"
-            echo "User: $(whoami)"
-            echo "Home: $HOME"
-            echo "Current dir: $(pwd)"
-            echo ""
-            echo "📦 Docker version:"
-            docker --version || echo "⚠️ Docker not found"
-            echo ""
-            echo "📦 Docker Compose version:"
-            docker compose version || docker-compose --version || echo "⚠️ Docker Compose not found"
-            echo ""
-            echo "📁 Project directory:"
-            ls -la ${{ secrets.VM_DEPLOY_PATH }} 2>/dev/null || echo "⚠️ Project directory not found"
-            echo ""
-            echo "🔐 Docker permissions:"
-            groups | grep -q docker && echo "✅ User in docker group" || echo "⚠️ User not in docker group"
-        ENDSSH
-        
-    - name: Deploy to production VM
-      run: |
-        echo "🚀 Starting deployment..."
-        ssh -i ~/.ssh/deploy_key \
-          -o StrictHostKeyChecking=no \
-          -o UserKnownHostsFile=/dev/null \
-          -o IdentitiesOnly=yes \
-          -o ServerAliveInterval=60 \
-          -o ServerAliveCountMax=3 \
-          -p ${{ secrets.VM_SSH_PORT }} \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
-          set -e
-          
-          echo "📂 Navigating to project directory..."
-          cd ${{ secrets.VM_DEPLOY_PATH }}
-          
-          echo "📥 Pulling latest code from main branch..."
-          git fetch origin
-          git reset --hard origin/main
-          git pull origin main
-          
-          echo "🛑 Stopping existing containers..."
-          docker compose down || docker-compose down || true
-          
-          echo "🧹 Cleaning up old images..."
-          docker system prune -af --volumes
-          
-          echo "🏗️ Building and starting containers..."
-          docker compose up -d --build || docker-compose up -d --build
-          
-          echo "⏳ Waiting for services to start..."
-          sleep 15
-          
-          echo "🔍 Checking container status..."
-          docker compose ps || docker-compose ps
-          
-          echo "📊 Checking backend health..."
-          for i in {1..30}; do
-            if curl -f http://localhost:6034/health 2>/dev/null; then
-              echo "✅ Backend is healthy!"
-              break
-            fi
-            echo "⏳ Attempt $i/30: Backend not ready yet..."
-            sleep 2
-          done
-          
-          echo "📊 Checking frontend..."
-          if curl -f http://localhost:6033 2>/dev/null; then
-            echo "✅ Frontend is accessible!"
-          else
-            echo "⚠️ Frontend check failed, but continuing..."
-          fi
-          
-          echo "📋 Container logs (last 50 lines):"
-          docker compose logs --tail=50 || docker-compose logs --tail=50
-          
-          echo "✅ Deployment completed successfully!"
-        ENDSSH
-        
-    - name: Verify deployment
-      if: success()
-      run: |
-        echo "✅ Verifying deployment..."
-        ssh -i ~/.ssh/deploy_key \
-          -o StrictHostKeyChecking=no \
-          -o UserKnownHostsFile=/dev/null \
-          -p ${{ secrets.VM_SSH_PORT }} \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
-          cd ${{ secrets.VM_DEPLOY_PATH }}
-          echo "📊 Running containers:"
-          docker compose ps
-          echo ""
-          echo "💾 Disk usage:"
-          df -h | grep -E '(Filesystem|/$)'
-          echo ""
-          echo "🐳 Docker disk usage:"
-          docker system df
-        ENDSSH
-        
-    - name: Rollback on failure
-      if: failure()
-      run: |
-        echo "❌ Deployment failed! Attempting rollback..."
-        ssh -i ~/.ssh/deploy_key \
-          -o StrictHostKeyChecking=no \
-          -o UserKnownHostsFile=/dev/null \
-          -p ${{ secrets.VM_SSH_PORT }} \
-          ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
-          cd ${{ secrets.VM_DEPLOY_PATH }}
-          echo "⏮️ Rolling back to previous version..."
-          git reset --hard HEAD~1
-          docker compose down || true
-          docker compose up -d --build
-        ENDSSH
-           
+              ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+            echo "Connected to VM as $(whoami) @ $(hostname)"
+            echo "Docker: $(docker --version 2>/dev/null || echo 'Not found')"
+            echo "Docker Compose: $(docker compose version 2>/dev/null || docker-compose --version || echo 'Not found')"
+            echo "Project path: ${{ secrets.VM_DEPLOY_PATH }}"
+            ls -la ${{ secrets.VM_DEPLOY_PATH }} || echo "Directory not found"
+            groups | grep docker && echo "User in docker group" || echo "Not in docker group"
+          ENDSSH
+
+      - name: Deploy to Production VM
+        run: |
+          echo "Starting deployment to production..."
+          ssh -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ServerAliveInterval=60 \
+              -o ServerAliveCountMax=3 \
+              -p ${{ secrets.VM_SSH_PORT }} \
+              ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+            set -e
+            cd ${{ secrets.VM_DEPLOY_PATH }}
+
+            echo "Pulling latest code..."
+            git fetch --all
+            git reset --hard origin/main
+            git clean -fd
+
+            echo "Stopping old containers..."
+            docker compose down || docker-compose down || true
+
+            echo "Cleaning up old Docker data..."
+            docker system prune -af --volumes
+
+            echo "Building and starting new containers..."
+            docker compose up -d --build || docker-compose up -d --build
+
+            echo "Waiting for services..."
+            sleep 15
+
+            echo "Container status:"
+            docker compose ps
+
+            echo "Checking backend health (port 6034)..."
+            for i in {1..30}; do
+              if curl -f http://localhost:6034/health >/dev/null 2>&1; then
+                echo "Backend is healthy!"
+                break
+              fi
+              echo "Attempt $i/30: Backend not ready..."
+              sleep 2
+            done
+
+            echo "Checking frontend (port 6033)..."
+            curl -f http://localhost:6033 >/dev/null 2>&1 && echo "Frontend is up!" || echo "Frontend check failed"
+
+            echo "Deployment completed successfully!"
+          ENDSSH
+
+      - name: Final verification
+        if: success()
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -p ${{ secrets.VM_SSH_PORT }} \
+              ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+            cd ${{ secrets.VM_DEPLOY_PATH }}
+            echo "Running containers:"
+            docker compose ps
+            echo "Disk usage:"
+            df -h /
+            docker system df
+          ENDSSH
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed → Starting rollback..."
+          ssh -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -p ${{ secrets.VM_SSH_PORT }} \
+              ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} << 'ENDSSH'
+            cd ${{ secrets.VM_DEPLOY_PATH }} || exit 1
+            echo "Rolling back to previous commit..."
+            git reset --hard HEAD~1 || echo "No previous commit"
+            docker compose down || true
+            docker compose up -d --build || echo "Rollback failed"
+            echo "Rollback attempted"
+          ENDSSH
+
   notify:
-    name: Send Notification
+    name: Send Slack Notification
     runs-on: ubuntu-24.04
     needs: [test, build, deploy]
     if: always()
-
     steps:
-    - name: Send Slack notification
-      continue-on-error: true
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      run: |
-        if [ -n "$SLACK_WEBHOOK_URL" ]; then
-          STATUS="${{ needs.deploy.result }}"
-          if [ "$STATUS" == "success" ]; then
-            COLOR="good"
-            EMOJI="✅"
-          elif [ "$STATUS" == "failure" ]; then
-            COLOR="danger"
-            EMOJI="❌"
-          else
-            COLOR="warning"
-            EMOJI="⚠️"
+      - name: Send notification
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "No Slack webhook → skip"
+            exit 0
           fi
+
+          STATUS="${{ needs.deploy.result }}"
+          [ "$STATUS" = "success" ] && COLOR="good" EMOJI="Deploy thành công" || COLOR="danger" EMOJI="Deploy thất bại"
+
           curl -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            -d "{
+            -H 'Content-type: application/json' \
+            --data "{
               \"attachments\": [{
                 \"color\": \"$COLOR\",
-                \"title\": \"$EMOJI CI/CD Pipeline $STATUS\",
+                \"title\": \"$EMOJI CI/CD • ${{ github.ref_name }}\",
                 \"fields\": [
-                  {
-                    \"title\": \"Status\",
-                    \"value\": \"$STATUS\",
-                    \"short\": true
-                  },
-                  {
-                    \"title\": \"Branch\",
-                    \"value\": \"${{ github.ref_name }}\",
-                    \"short\": true
-                  },
-                  {
-                    \"title\": \"Commit\",
-                    \"value\": \"<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\",
-                    \"short\": true
-                  },
-                  {
-                    \"title\": \"Author\",
-                    \"value\": \"${{ github.actor }}\",
-                    \"short\": true
-                  },
-                  {
-                    \"title\": \"Workflow\",
-                    \"value\": \"<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>\",
-                    \"short\": false
-                  }
+                  {\"title\": \"Status\", \"value\": \"$STATUS\", \"short\": true},
+                  {\"title\": \"Commit\", \"value\": \"<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}\\>", \"short\": true},
+                  {\"title\": \"Author\", \"value\": \"${{ github.actor }}\", \"short\": true},
+                  {\"title\": \"Run\", \"value\": \"<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Log>\", \"short\": false}
                 ],
                 \"footer\": \"GitHub Actions\",
-                \"footer_icon\": \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\",
                 \"ts\": $(date +%s)
               }]
             }"
-          echo "✅ Slack notification sent"
-        else
-          echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping notification"
-        fi
+          echo "Notification sent"
