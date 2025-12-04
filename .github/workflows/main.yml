@@ -100,7 +100,7 @@ jobs:
 
     steps:
     - name: Send Gmail notification
-      if: $ {{secrets.SLACK_WEBHOOK}}
+      if: ${{ secrets.SLACK_WEBHOOK }}
       uses: 8398a7/action-slack@v3
       with:
         status: ${{ job.status }}
