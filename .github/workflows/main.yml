@@ -1,4 +1,3 @@
-// filepath: /home/nguyenquangnhat/Documents/badge_detection/badge-and-face-recognise/.github/workflows/verify-key.yml
 name: Verify SSH Key
 
 on:
